@@ -23,21 +23,16 @@
               placeholder="Например DOGE"
             />
           </div>
-          <div class="flex bg-white shadow-md p-1 rounded-md flex-wrap">
-            <span class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer">
-              BTC
-            </span>
-            <span class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer">
-              DOGE
-            </span>
-            <span class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer">
-              BCH
-            </span>
-            <span class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer">
-              CHD
+          <div class="flex bg-white shadow-md p-1 rounded-md flex-wrap" v-if="coinListModel.length">
+            <span
+              v-for="coin in coinListModel"
+              :key="coin"
+              @click="selectCoin(coin)"
+              class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer">
+              {{ coin }}
             </span>
           </div>
-          <div class="text-sm text-red-600">Такой тикер уже добавлен</div>
+          <div class="text-sm text-red-600" v-if="error">{{error}}</div>
         </div>
       </div>
       <button
@@ -149,31 +144,82 @@
 </template>
 
 <script>
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 export default {
   setup() {
     const ticker = ref("");
     const tickers = ref([]);
     const sel = ref(null);
     const graph = ref([]);
+    const coinList = ref([]);
+    const coinListModel = ref([]);
+    const error = ref(null);
+
+    function normalizeCoins(coins) {
+      return Object.keys(coins).map(c => c);
+    }
+
+    function searchCoins(value, maxCoin = 4) {
+      coinListModel.value = [];
+      coinList.value.forEach((c) => {
+        if (coinListModel.value?.length >= maxCoin) return;
+        const isExist = c.includes(value);
+        if (isExist) {
+          coinListModel.value.push(c);
+        }
+      });
+    }
+
+    (async () => {
+      const tickersData = localStorage.getItem('criptonomicon-list');
+      if (tickersData) {
+        tickers.value = JSON.parse(tickersData);
+        tickers.value.forEach(t => subscribeToUpdates(t.name));
+      }
+
+      const coins = await fetch('https://min-api.cryptocompare.com/data/all/coinlist?summary=true');
+      const response = await coins.json();
+      coinList.value = normalizeCoins(response.Data);
+    })();
+
+    function subscribeToUpdates(tickerName) {
+      setInterval(async () => {
+        const f = await fetch(`https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=29ba832e6080e3ba17fa45f776857ad2507a0b25019c9f23db61f0b7a06a6b34`);
+        const data = await f.json();
+        tickers.value.find(t => t.name === tickerName).price = data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+
+        if (sel.value && sel.value.name === tickerName) {
+          graph.value.push(data.USD);
+        }
+      }, 3000);
+      ticker.value = "";
+    }
+
+    const selectCoin = (coin) => {
+      ticker.value = coin;
+      addTicker();
+    };
+
+    watch(ticker, (nValue) => {
+      if (!nValue) return;
+      searchCoins(nValue);
+    });
 
     const addTicker = () => {
+      const isExist = tickers.value.some(t => t.name.toLowerCase() == ticker.value.toLowerCase());
+      if (isExist) {
+        error.value = 'Такой тикер уже добавлен';
+        return;
+      }
+
       const newTicker = {
         name: ticker.value,
         price: 0
       };
 
       tickers.value.unshift(newTicker);
-      setInterval(async () => {
-        const f = await fetch(`https://min-api.cryptocompare.com/data/price?fsym=${newTicker.name}&tsyms=USD&api_key=29ba832e6080e3ba17fa45f776857ad2507a0b25019c9f23db61f0b7a06a6b34`);
-        const data = await f.json();
-        tickers.value.find(t => t.name === newTicker.name).price = data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-
-        if (sel.value && sel.value.name === newTicker.name) {
-          graph.value.push(data.USD);
-        }
-      }, 3000);
-      ticker.value = "";
+      localStorage.setItem('criptonomicon-list', JSON.stringify(tickers.value));
+      subscribeToUpdates(ticker.value.name);
     };
 
     const selectTicker = ticker => {
@@ -183,6 +229,7 @@ export default {
 
     const deleteTicker = (tickerValue) => {
       tickers.value = tickers.value.filter(t => t !== tickerValue);
+      localStorage.setItem('criptonomicon-list', JSON.stringify(tickers.value));
     };
 
     const normalizeGraph = () => {
@@ -199,10 +246,14 @@ export default {
       tickers,
       sel,
       graph,
+      coinList,
+      coinListModel,
+      error,
       addTicker,
       selectTicker,
       deleteTicker,
-      normalizeGraph
+      normalizeGraph,
+      selectCoin
     };
   }
 };
