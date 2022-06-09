@@ -72,7 +72,7 @@
           bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
           Вперед
         </button>
-        <div>Фильтр: <input class="border-gray-300" v-model="filter"></div>
+        <div>Фильтр: <input type="text" class="pr-10 border-gray-300 text-gray-900 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md" v-model="filter"></div>
       </div>
       <hr class="w-full border-t border-gray-600 my-4" />
       <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
@@ -88,7 +88,7 @@
               {{ ticker.name }} - USD
             </dt>
             <dd class="mt-1 text-3xl font-semibold text-gray-900">
-              {{ ticker.price }}
+              {{ formatPrice(ticker.price) }}
             </dd>
           </div>
           <div class="w-full border-t border-gray-200"></div>
@@ -162,6 +162,9 @@
 
 <script>
 import { computed, ref, watch } from 'vue';
+
+import { subscribeToTicker, unSubscribeFromTicker } from '@/api';
+
 export default {
   setup() {
     const ticker = ref("");
@@ -187,8 +190,12 @@ export default {
       const tickersData = localStorage.getItem('criptonomicon-list');
       if (tickersData) {
         tickers.value = JSON.parse(tickersData);
-        tickers.value.forEach(t => subscribeToUpdates(t.name));
+        tickers.value.forEach(ticker => {
+          subscribeToTicker(ticker.name, (newPrice) => updateTicker(ticker.name, newPrice));
+        });
       }
+
+      setInterval(updateTickers, 5000);
 
       const coins = await fetch('https://min-api.cryptocompare.com/data/all/coinlist?summary=true');
       const response = await coins.json();
@@ -209,10 +216,6 @@ export default {
     const normalizedGraph = computed(() => {
       const maxValue = Math.max(...graph.value);
       const minValue = Math.min(...graph.value);
-
-      if (maxValue == minValue) {
-        return graph.value.map(() => 50);
-      }
 
       const res = graph.value.map(price => {
         return (price - minValue) * 95 / (maxValue - minValue);
@@ -275,23 +278,32 @@ export default {
       });
     }
 
-    function subscribeToUpdates(tickerName) {
-      setInterval(async () => {
-        const f = await fetch(`https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=29ba832e6080e3ba17fa45f776857ad2507a0b25019c9f23db61f0b7a06a6b34`);
-        const data = await f.json();
-        const currentTicker = tickers.value.find(t => t.name.toLowerCase() === tickerName.toLowerCase());
-        if (currentTicker) {
-          currentTicker.price = data.USD > 1 ? parseFloat(data.USD).toFixed(2) : parseFloat(data.USD).toPrecision(2);
-        }
-
-        if (selectedTicker.value && selectedTicker.value.name === tickerName) {
-          graph.value.push(data.USD);
-        }
-      }, 3000);
-      ticker.value = "";
+    function formatPrice(price) {
+      const convertPrice = parseFloat(price);
+      return convertPrice > 1 ? convertPrice.toFixed(2) : convertPrice.toPrecision(2);
     }
 
-    const selectCoin = (coin) => {
+    function updateTicker(tickerName, price) {
+      tickers.value.filter(t => t.name === tickerName).forEach(t => t.price = price);
+    }
+
+    async function updateTickers() {
+      /* if (!tickers.value.length) return;
+
+      const data = await loadTickers(tickers.value.map(t => t.name));
+      tickers.value.forEach(ticker => {
+        const price = data[ticker.name.toUpperCase()];
+        ticker.price = price ?? "-";
+      });
+
+      if (selectedTicker.value?.price) {
+        graph.value.push(selectedTicker.value.price);
+      }
+
+      ticker.value = ""; */
+    }
+
+    const selectCoin = coin => {
       ticker.value = coin;
       addTicker();
     };
@@ -314,16 +326,21 @@ export default {
       };
 
       tickers.value.unshift(newTicker);
-      subscribeToUpdates(newTicker.name);
       filter.value = "";
+      ticker.value = "";
+      subscribeToTicker(newTicker.name, (newPrice) => updateTicker(newTicker.name, newPrice));
     };
 
     const selectTicker = ticker => {
       selectedTicker.value = ticker;
     };
 
-    const deleteTicker = (tickerValue) => {
-      tickers.value = tickers.value.filter(t => t !== tickerValue);
+    const deleteTicker = tickerToRemove => {
+      tickers.value = tickers.value.filter(t => t !== tickerToRemove);
+      if (selectTicker.value === tickerToRemove) {
+        selectTicker.value = null;
+      }
+      unSubscribeFromTicker(tickerToRemove.name);
     };
 
     return {
@@ -343,7 +360,8 @@ export default {
       normalizedGraph,
       selectCoin,
       filteredTickers,
-      paginatedTickers
+      paginatedTickers,
+      formatPrice
     };
   }
 };
