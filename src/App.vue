@@ -195,8 +195,6 @@ export default {
         });
       }
 
-      setInterval(updateTickers, 5000);
-
       const coins = await fetch('https://min-api.cryptocompare.com/data/all/coinlist?summary=true');
       const response = await coins.json();
       coinList.value = normalizeCoins(response.Data);
@@ -217,10 +215,13 @@ export default {
       const maxValue = Math.max(...graph.value);
       const minValue = Math.min(...graph.value);
 
-      const res = graph.value.map(price => {
+      if (maxValue === minValue) {
+        return graph.value.map(() => 50);
+      }
+
+      return graph.value.map(price => {
         return (price - minValue) * 95 / (maxValue - minValue);
       });
-      return res;
     });
 
     const pageStateOptions = computed(() => {
@@ -279,28 +280,22 @@ export default {
     }
 
     function formatPrice(price) {
-      const convertPrice = parseFloat(price);
-      return convertPrice > 1 ? convertPrice.toFixed(2) : convertPrice.toPrecision(2);
+      if (price === "-") {
+        return price;
+      }
+      return price > 1 ? price.toFixed(2) : price.toPrecision(2);
     }
 
     function updateTicker(tickerName, price) {
-      tickers.value.filter(t => t.name === tickerName).forEach(t => t.price = price);
-    }
-
-    async function updateTickers() {
-      /* if (!tickers.value.length) return;
-
-      const data = await loadTickers(tickers.value.map(t => t.name));
-      tickers.value.forEach(ticker => {
-        const price = data[ticker.name.toUpperCase()];
-        ticker.price = price ?? "-";
-      });
-
-      if (selectedTicker.value?.price) {
-        graph.value.push(selectedTicker.value.price);
-      }
-
-      ticker.value = ""; */
+      tickers.value
+        .filter(t => t.name === tickerName)
+        .forEach(t => {
+          if (selectedTicker.value?.price && t === selectedTicker.value) {
+            graph.value.push(selectedTicker.value.price);
+          }
+          t.price = price;
+        }
+      );
     }
 
     const selectCoin = coin => {
