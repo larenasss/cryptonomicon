@@ -237,8 +237,7 @@ export default {
         coinListModel.value = [];
         return;
       }
-      searchCoins(nValue);
-      error.value = null;
+      searchCoins(nValue.toLowerCase());
     });
 
     watch(filter, () => {
@@ -271,12 +270,19 @@ export default {
     function searchCoins(value, maxCoin = 4) {
       coinListModel.value = [];
       coinList.value.forEach((c) => {
-        if (coinListModel.value?.length >= maxCoin) return;
-        const isExist = c.includes(value);
-        if (isExist) {
+        const coinToLover = c.toLowerCase();
+        const isExist = coinToLover.match(value);
+        if (!isExist || isExist.index !== 0) return;
+        if (coinToLover === value.toLowerCase()) {
+          coinListModel.value.unshift(c);
+          return;
+        }
+        if ((coinToLover.length - value.length) == 1) {
           coinListModel.value.push(c);
+          return;
         }
       });
+      coinListModel.value = coinListModel.value.slice(0, maxCoin);
     }
 
     function formatPrice(price) {
