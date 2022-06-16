@@ -37,7 +37,8 @@
 import { formatPrice } from '@/helpers/formatPrice';
 export default {
   emits: {
-    selectTicker: null
+    selectTicker: null,
+    deleteTicker: null
   },
   props: {
     ticker: {

@@ -53,10 +53,6 @@ export default {
       const maxValue = Math.max(...graph.value);
       const minValue = Math.min(...graph.value);
 
-      if (maxValue === minValue) {
-        return graph.value.map(() => 50);
-      }
-
       return graph.value.map(price => {
         return (price - minValue) * 95 / (maxValue - minValue);
       });

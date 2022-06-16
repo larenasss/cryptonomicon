@@ -9,8 +9,6 @@
   <div class="container">
     <section>
       <app-add-ticker
-        :coinList="coinList"
-        :error="error"
         @addTicker="addTicker"
       >
       </app-add-ticker>
@@ -59,6 +57,7 @@
       <hr class="w-full border-t border-gray-600 my-4" />
     </template>
     <section v-if="selectedTicker" class="relative">
+      {{ selectedTicker }}
       <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
         {{ selectedTicker.name }} - USD
       </h3>
@@ -77,12 +76,16 @@
 <script>
 import { computed, onBeforeMount, onMounted, ref, watch, nextTick } from 'vue';
 import { subscribeToTicker, unSubscribeFromTicker } from '@/api';
+import { storeToRefs } from 'pinia';
+
 import AppInput from '@/components/AppInput.vue';
 import AppGraph from './components/AppGraph.vue';
 import AppTicker from './components/AppTicker.vue';
 
 import { formatPrice } from '@/helpers/formatPrice';
 import AppAddTicker from './components/AppAddTicker.vue';
+
+import { useTickersStore } from '@/stores/tickers';
 
 export default {
   components: {
@@ -92,38 +95,28 @@ export default {
     AppAddTicker
   },
   setup() {
-    const tickers = ref([]);
     const selectedTicker = ref(null);
     const graph = ref([]);
     const graphContainer = ref(null);
-    const coinList = ref([]);
-    const error = ref(null);
     const page = ref(1);
     const filter = ref("");
     const maxGraphElements = ref(1);
 
+    const store = useTickersStore();
+    const { tickers } = storeToRefs(store);
+
     // created
-    (async () => {
-      const windowData = Object.fromEntries(new URL(window.location).searchParams.entries());
-      if (windowData.filter) {
-        filter.value = windowData.filter;
-      }
-      if (windowData.page) {
-        page.value = windowData.page;
-      }
+    const windowData = Object.fromEntries(new URL(window.location).searchParams.entries());
+    if (windowData.filter) {
+      filter.value = windowData.filter;
+    }
+    if (windowData.page) {
+      page.value = windowData.page;
+    }
 
-      const tickersData = localStorage.getItem('criptonomicon-list');
-      if (tickersData) {
-        tickers.value = JSON.parse(tickersData);
-        tickers.value.forEach(ticker => {
-          subscribeToTicker(ticker.name, (newPrice) => updateTicker(ticker.name, newPrice));
-        });
-      }
-
-      const coins = await fetch('https://min-api.cryptocompare.com/data/all/coinlist?summary=true');
-      const response = await coins.json();
-      coinList.value = normalizeCoins(response.Data);
-    })();
+    tickers.value.forEach(ticker => {
+      subscribeToTicker(ticker.name, (newPrice) => updateTicker(ticker.name, newPrice));
+    });
 
     onMounted(() => {
       window.addEventListener(
@@ -185,10 +178,6 @@ export default {
       maxGraphElements.value = graphContainer.value.clientWidth / 38;
     }
 
-    function normalizeCoins(coins) {
-      return Object.keys(coins).map(c => c);
-    }
-
     function updateTicker(tickerName, price) {
       tickers.value
         .filter(t => t.name === tickerName)
@@ -204,24 +193,8 @@ export default {
       );
     }
 
-    const addTicker = tickerName => {
-      if (!tickerName) {
-        error.value = 'Укажите название тикера';
-        return;
-      }
-
-      const isExist = tickers.value.some(t => t.name.toLowerCase() == tickerName.toLowerCase());
-      if (isExist) {
-        error.value = 'Такой тикер уже добавлен';
-        return;
-      }
-
-      const newTicker = {
-        name: tickerName,
-        price: 0
-      };
-
-      tickers.value.unshift(newTicker);
+    const addTicker = newTicker => {
+      store.addTicker(newTicker);
       filter.value = "";
       subscribeToTicker(newTicker.name, (newPrice) => updateTicker(newTicker.name, newPrice));
     };
@@ -232,9 +205,9 @@ export default {
     };
 
     const deleteTicker = tickerToRemove => {
-      tickers.value = tickers.value.filter(t => t !== tickerToRemove);
-      if (selectTicker.value === tickerToRemove) {
-        selectTicker.value = null;
+      store.deleteTicker(tickerToRemove);
+      if (selectedTicker.value === tickerToRemove) {
+        selectedTicker.value = null;
       }
       unSubscribeFromTicker(tickerToRemove.name);
     };
@@ -244,8 +217,6 @@ export default {
       selectedTicker,
       graph,
       graphContainer,
-      coinList,
-      error,
       filter,
       page,
       hasNextPage,
