@@ -9,7 +9,7 @@
   <div class="container">
     <section>
       <app-add-ticker
-        @addTicker="addTicker"
+        @addTicker="addTickerOver"
       >
       </app-add-ticker>
     </section>
@@ -64,6 +64,7 @@
         <app-graph
           :graph="graph"
           @closeGraph="selectedTicker = null"
+          :graphContainer="graphContainer"
         >
         </app-graph>
       </div>
@@ -73,9 +74,7 @@
 </template>
 
 <script>
-import { computed, onBeforeMount, onMounted, ref, watch, nextTick } from 'vue';
-import { subscribeToTicker, unSubscribeFromTicker } from '@/api';
-import { storeToRefs } from 'pinia';
+import { computed, ref, watch } from 'vue';
 
 import AppInput from '@/components/AppInput.vue';
 import AppGraph from './components/AppGraph.vue';
@@ -84,7 +83,7 @@ import AppTicker from './components/AppTicker.vue';
 import { formatPrice } from '@/helpers/formatPrice';
 import AppAddTicker from './components/AppAddTicker.vue';
 
-import { useTickersStore } from '@/stores/tickers';
+import { useTickersManagement } from '@/use/useTickersManagement';
 
 export default {
   components: {
@@ -94,15 +93,8 @@ export default {
     AppAddTicker
   },
   setup() {
-    const selectedTicker = ref(null);
-    const graph = ref([]);
-    const graphContainer = ref(null);
     const page = ref(1);
     const filter = ref("");
-    const maxGraphElements = ref(1);
-
-    const store = useTickersStore();
-    const { tickers } = storeToRefs(store);
 
     // created
     const windowData = Object.fromEntries(new URL(window.location).searchParams.entries());
@@ -113,21 +105,7 @@ export default {
       page.value = windowData.page;
     }
 
-    tickers.value.forEach(ticker => {
-      subscribeToTicker(ticker.name, (newPrice) => updateTicker(ticker.name, newPrice));
-    });
-
-    onMounted(() => {
-      window.addEventListener(
-        'resize', calculateMaxGraphElements
-      );
-    });
-
-    onBeforeMount(() => {
-      window.removeEventListener(
-        'resize', calculateMaxGraphElements
-      );
-    });
+    const { tickers, selectedTicker, graph, selectTicker, addTicker, deleteTicker, graphContainer } = useTickersManagement();
 
     // computed
     const startIndex = computed(() => (page.value - 1) * 6);
@@ -148,7 +126,6 @@ export default {
     });
 
     // watch
-
     watch(filter, () => {
       page.value = 1;
     });
@@ -159,72 +136,30 @@ export default {
       }
     });
 
-    watch(selectedTicker, () => {
-      graph.value = [];
-    });
-
-    watch(() => tickers.value.length, () => {
-      localStorage.setItem('criptonomicon-list', JSON.stringify(tickers.value));
-    });
-
     watch(pageStateOptions, (value) => {
       window.history.pushState(null, document.title, `${window.location.pathname}?filter=${value.filter}&page=${value.page}`);
     });
 
     // methods
-    function calculateMaxGraphElements() {
-      if (!graphContainer.value) return;
-      maxGraphElements.value = graphContainer.value.clientWidth / 38;
-    }
-
-    function updateTicker(tickerName, price) {
-      tickers.value
-        .filter(t => t.name === tickerName)
-        .forEach(t => {
-          if (t === selectedTicker.value) {
-            graph.value.push(price);
-            while (graph.value.length > maxGraphElements.value) {
-              graph.value.shift();
-            }
-          }
-          t.price = price;
-        }
-      );
-    }
-
-    const addTicker = newTicker => {
-      store.addTicker(newTicker);
+    const addTickerOver = (newTicker) => {
+      addTicker(newTicker);
       filter.value = "";
-      subscribeToTicker(newTicker.name, (newPrice) => updateTicker(newTicker.name, newPrice));
-    };
-
-    const selectTicker = ticker => {
-      selectedTicker.value = ticker;
-      nextTick().then(calculateMaxGraphElements);
-    };
-
-    const deleteTicker = tickerToRemove => {
-      store.deleteTicker(tickerToRemove);
-      if (selectedTicker.value === tickerToRemove) {
-        selectedTicker.value = null;
-      }
-      unSubscribeFromTicker(tickerToRemove.name);
     };
 
     return {
-      tickers,
-      selectedTicker,
-      graph,
-      graphContainer,
       filter,
       page,
       hasNextPage,
-      addTicker,
-      selectTicker,
-      deleteTicker,
       filteredTickers,
       paginatedTickers,
-      formatPrice
+      formatPrice,
+      tickers,
+      selectedTicker,
+      graph,
+      selectTicker,
+      addTickerOver,
+      deleteTicker,
+      graphContainer
     };
   }
 };

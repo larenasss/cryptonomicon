@@ -58,7 +58,7 @@ export default {
     const tickerValue = ref("");
     const error = ref(null);
     const coinList = ref([]);
-    const store = useTickersStore();
+    const storeTickers = useTickersStore();
 
     getAllCoins().then(res => coinList.value = res);
 
@@ -75,7 +75,7 @@ export default {
         return;
       }
 
-      const isExist = store.tickers.some(t => t.name.toLowerCase() == tickerName.toLowerCase());
+      const isExist = storeTickers.tickers.some(t => t.name.toLowerCase() == tickerName.toLowerCase());
       if (isExist) {
         error.value = 'Такой тикер уже добавлен';
         return;

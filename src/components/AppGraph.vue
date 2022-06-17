@@ -36,7 +36,8 @@
 </template>
 
 <script>
-import { ref, computed } from '@vue/reactivity';
+import { toRefs } from '@vue/reactivity';
+import { useGraphManagement } from '@/use/useGraphManagement';
 export default {
   emits: {
     closeGraph: null
@@ -44,19 +45,16 @@ export default {
   props: {
     graph: {
       type: Array
+    },
+    graphContainer: {
+      type: Object
     }
   },
   setup(props) {
-    const graph = ref(props.graph);
+    const { graph, graphContainer } = toRefs(props);
+    const { normalizedGraph } = useGraphManagement(graph, graphContainer);
 
-    const normalizedGraph = computed(() => {
-      const maxValue = Math.max(...graph.value);
-      const minValue = Math.min(...graph.value);
-
-      return graph.value.map(price => {
-        return (price - minValue) * 95 / (maxValue - minValue);
-      });
-    });
+    console.log(graphContainer);
 
     return {
       normalizedGraph
